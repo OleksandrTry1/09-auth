@@ -35,7 +35,7 @@ export interface UpdateMeRequest {
 }
 
 interface CheckSessionResponse {
-  message: string;
+  success: boolean;
 }
 
 export const fetchNotes = async ({
@@ -89,7 +89,7 @@ export const logout = async (): Promise<void> => {
 };
 
 export const checkSession = async (): Promise<boolean> => {
-  await nextServer.get<CheckSessionResponse>("/auth/session");
+  await nextServer.get("/auth/session");
 
   return true;
 };
