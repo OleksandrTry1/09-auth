@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { parseSetCookie } from "cookie";
@@ -6,43 +7,32 @@ import { checkSession } from "@/lib/api/serverApi";
 const privateRoutes = ["/profile", "/notes"];
 const publicRoutes = ["/sign-in", "/sign-up"];
 
-interface SessionResult {
-  isAuthenticated: boolean;
-  setCookies: string[];
-}
-
 const matchesRoute = (pathname: string, routes: string[]): boolean =>
   routes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 
-const refreshSession = async (request: NextRequest): Promise<SessionResult> => {
+// Asks the backend to refresh the session and stores the new tokens through
+// the cookies() store, which writes them to the outgoing response.
+const refreshSession = async (): Promise<boolean> => {
   try {
     const response = await checkSession();
     const header = response.headers["set-cookie"];
     const setCookies = Array.isArray(header) ? header : header ? [header] : [];
+    const cookieStore = await cookies();
 
-    // Let the page rendered during this request see the refreshed tokens.
     for (const setCookie of setCookies) {
       const parsed = parseSetCookie(setCookie);
 
       if (parsed.value) {
-        request.cookies.set(parsed.name, parsed.value);
+        cookieStore.set(parsed.name, parsed.value, parsed);
       }
     }
 
-    return { isAuthenticated: response.status === 200, setCookies };
+    return response.data.success;
   } catch {
-    return { isAuthenticated: false, setCookies: [] };
+    return false;
   }
-};
-
-const withCookies = (response: NextResponse, setCookies: string[]) => {
-  for (const setCookie of setCookies) {
-    response.headers.append("set-cookie", setCookie);
-  }
-
-  return response;
 };
 
 export async function proxy(request: NextRequest) {
@@ -53,33 +43,22 @@ export async function proxy(request: NextRequest) {
   const hasAccessToken = Boolean(request.cookies.get("accessToken")?.value);
   const hasRefreshToken = Boolean(request.cookies.get("refreshToken")?.value);
 
-  let session: SessionResult = {
-    isAuthenticated: hasAccessToken,
-    setCookies: [],
-  };
+  let isAuthenticated = hasAccessToken;
 
   // No access token, but the refresh token may still restore the session.
   if (!hasAccessToken && hasRefreshToken) {
-    session = await refreshSession(request);
+    isAuthenticated = await refreshSession();
   }
 
-  const { isAuthenticated, setCookies } = session;
-
   if (isPrivateRoute && !isAuthenticated) {
-    return withCookies(
-      NextResponse.redirect(new URL("/sign-in", request.url)),
-      setCookies,
-    );
+    return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
   if (isPublicRoute && isAuthenticated) {
-    return withCookies(
-      NextResponse.redirect(new URL("/profile", request.url)),
-      setCookies,
-    );
+    return NextResponse.redirect(new URL("/profile", request.url));
   }
 
-  return withCookies(NextResponse.next({ request }), setCookies);
+  return NextResponse.next();
 }
 
 export const config = {

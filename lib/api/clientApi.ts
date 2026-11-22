@@ -89,9 +89,9 @@ export const logout = async (): Promise<void> => {
 };
 
 export const checkSession = async (): Promise<boolean> => {
-  await nextServer.get("/auth/session");
+  const response = await nextServer.get<CheckSessionResponse>("/auth/session");
 
-  return true;
+  return response.data.success;
 };
 
 export const getMe = async (): Promise<User> => {

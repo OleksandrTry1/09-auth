@@ -1,8 +1,8 @@
 import axios from "axios";
 
-// Browser requests go through the local Next.js route handler so that
-// authentication cookies belong to localhost and can be read by proxy.ts.
+const baseURL = process.env.NEXT_PUBLIC_API_URL + "/api";
+
 export const nextServer = axios.create({
-  baseURL: "/api",
+  baseURL,
   withCredentials: true,
 });
